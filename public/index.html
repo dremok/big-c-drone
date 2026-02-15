@@ -221,28 +221,41 @@ const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const W = canvas.width, H = canvas.height;
 
-// Highscore system
-const HS_KEY = 'bigc_highscores';
-function getHighscores() {
-  try { return JSON.parse(localStorage.getItem(HS_KEY)) || []; }
-  catch { return []; }
+// Highscore system - shared database
+const API_BASE = location.hostname === 'localhost' || location.hostname === '127.0.0.1'
+  ? '' : 'https://big-c-drone.onrender.com';
+
+let cachedScores = [];
+
+async function fetchHighscores() {
+  try {
+    const res = await fetch(API_BASE + '/api/scores');
+    cachedScores = await res.json();
+  } catch { /* offline fallback */ }
+  return cachedScores;
 }
-function saveHighscore(name, pts, numHits) {
-  const list = getHighscores();
-  list.push({ name: name || 'ANONYM', score: pts, hits: numHits, date: new Date().toISOString().slice(0,10) });
-  list.sort((a, b) => b.score - a.score);
-  if (list.length > 10) list.length = 10;
-  localStorage.setItem(HS_KEY, JSON.stringify(list));
-  return list;
+
+async function saveHighscore(name, pts, numHits) {
+  try {
+    const res = await fetch(API_BASE + '/api/scores', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name || 'ANONYM', score: pts, hits: numHits })
+    });
+    cachedScores = await res.json();
+  } catch { /* offline fallback */ }
+  return cachedScores;
 }
+
 function renderHighscores(containerId, highlightScore) {
-  const list = getHighscores();
+  const list = cachedScores;
   const el = document.getElementById(containerId);
-  if (!list.length) { el.innerHTML = ''; return; }
+  if (!list.length) { el.innerHTML = '<h3>TOPPLISTA</h3><div style="color:#555;font-size:12px;text-align:center">Inga poäng ännu</div>'; return; }
   let html = '<h3>TOPPLISTA</h3>';
+  let highlighted = false;
   list.forEach((hs, i) => {
-    const isNew = highlightScore !== undefined && hs.score === highlightScore && !hs._marked;
-    if (isNew) hs._marked = true;
+    const isNew = !highlighted && highlightScore !== undefined && hs.score === highlightScore;
+    if (isNew) highlighted = true;
     html += '<div class="hs-row' + (isNew ? ' new' : '') + '">' +
       '<span class="hs-rank">' + (i+1) + '.</span>' +
       '<span class="hs-name">' + hs.name + '</span>' +
@@ -251,9 +264,10 @@ function renderHighscores(containerId, highlightScore) {
   });
   el.innerHTML = html;
 }
+
 let playerName = '';
-// Show highscores on start screen
-renderHighscores('start-highscores');
+// Load highscores on start
+fetchHighscores().then(() => renderHighscores('start-highscores'));
 
 // Game state
 let drone, putin, bullets, missiles, explosions, particles;
@@ -631,18 +645,17 @@ function draw() {
   ctx.fillText('SLAVA UKRAINI', W-10, 36);
 }
 
-function showGameOver() {
+async function showGameOver() {
   const el = document.getElementById('game-over');
   el.style.display = 'flex';
   document.getElementById('go-score').textContent = `Poäng: ${score} | Träffar: ${hits}`;
 
   // Check if new record before saving
-  const oldList = getHighscores();
-  const isNewRecord = oldList.length === 0 || score > (oldList[0]?.score || 0);
+  const isNewRecord = cachedScores.length === 0 || score > (cachedScores[0]?.score || 0);
   document.getElementById('new-record').style.display = isNewRecord && score > 0 ? 'block' : 'none';
 
-  // Save highscore
-  saveHighscore(playerName, score, hits);
+  // Save highscore to server
+  await saveHighscore(playerName, score, hits);
 
   let title, msg;
   if (hits === 0) {
