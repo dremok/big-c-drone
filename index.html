@@ -222,13 +222,13 @@ const ctx = canvas.getContext('2d');
 const W = canvas.width, H = canvas.height;
 
 // Highscore system - shared database
-const API_BASE = '';
+const API_BASE = 'https://cirkeln-the-game-production.up.railway.app';
 
 let cachedScores = [];
 
 async function fetchHighscores() {
   try {
-    const res = await fetch(API_BASE + '/api/scores');
+    const res = await fetch(API_BASE + '/api/drone/scores');
     cachedScores = await res.json();
   } catch { /* offline fallback */ }
   return cachedScores;
@@ -236,7 +236,7 @@ async function fetchHighscores() {
 
 async function saveHighscore(name, pts, numHits) {
   try {
-    const res = await fetch(API_BASE + '/api/scores', {
+    const res = await fetch(API_BASE + '/api/drone/scores', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: name || 'ANONYM', score: pts, hits: numHits })
