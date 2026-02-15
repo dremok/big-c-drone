@@ -87,7 +87,7 @@ canvas {
   z-index: 10;
 }
 #game-over h1 { font-size: 32px; margin-bottom: 10px; }
-#game-over .score { font-size: 24px; color: #005bbb; margin-bottom: 20px; }
+#game-over .score { font-size: 24px; color: #005bbb; margin-bottom: 10px; }
 #game-over button {
   background: #005bbb;
   color: #ffd700;
@@ -130,6 +130,39 @@ canvas {
   font-family: 'Courier New', monospace;
   align-self: center;
 }
+.highscore-list {
+  text-align: left;
+  font-size: 12px;
+  color: #aaa;
+  margin: 10px 0;
+  max-width: 300px;
+  width: 100%;
+}
+.highscore-list .hs-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 0;
+  border-bottom: 1px solid #222;
+}
+.highscore-list .hs-row.new { color: #ffd700; font-weight: bold; }
+.highscore-list .hs-rank { width: 24px; color: #555; }
+.highscore-list .hs-name { flex: 1; }
+.highscore-list .hs-score { width: 80px; text-align: right; }
+.highscore-list h3 { color: #005bbb; font-size: 14px; margin-bottom: 6px; text-align: center; }
+.name-input {
+  background: #111;
+  border: 2px solid #ffd700;
+  color: #ffd700;
+  padding: 8px 16px;
+  font-size: 16px;
+  font-family: 'Courier New', monospace;
+  text-align: center;
+  margin-bottom: 15px;
+  width: 200px;
+}
+.name-input::placeholder { color: #555; }
+.new-record { color: #ff4400; font-size: 18px; margin-bottom: 10px; animation: pulse 0.5s infinite alternate; }
+@keyframes pulse { from { opacity: 0.6; } to { opacity: 1; } }
 @media (max-width: 768px) {
   .mobile-controls { display: flex; }
   #start-screen h1 { font-size: 24px; }
@@ -145,17 +178,19 @@ canvas {
   <div class="instructions">
     WASD / Piltangenter = Styr drönaren<br>
     MELLANSLAG = Skjut<br>
-    Jaga Putin. Undvik missiler.<br>
-    <br>
-    <em>Tillägnad Filosoficirkeln</em>
+    Jaga Putin. Undvik missiler.
   </div>
+  <input type="text" class="name-input" id="player-name" placeholder="DITT NAMN" maxlength="16">
+  <div id="start-highscores" class="highscore-list"></div>
   <button onclick="startGame()">STARTA UPPDRAGET</button>
 </div>
 
 <div id="game-over">
   <h1 id="go-title">UPPDRAG SLUTFÖRT</h1>
   <div class="score" id="go-score"></div>
-  <div style="color:#aaa;margin-bottom:20px" id="go-msg"></div>
+  <div id="new-record" class="new-record" style="display:none">★ NYTT REKORD! ★</div>
+  <div style="color:#aaa;margin-bottom:10px" id="go-msg"></div>
+  <div id="go-highscores" class="highscore-list"></div>
   <button onclick="startGame()">NYTT UPPDRAG</button>
 </div>
 
@@ -186,6 +221,40 @@ const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const W = canvas.width, H = canvas.height;
 
+// Highscore system
+const HS_KEY = 'bigc_highscores';
+function getHighscores() {
+  try { return JSON.parse(localStorage.getItem(HS_KEY)) || []; }
+  catch { return []; }
+}
+function saveHighscore(name, pts, numHits) {
+  const list = getHighscores();
+  list.push({ name: name || 'ANONYM', score: pts, hits: numHits, date: new Date().toISOString().slice(0,10) });
+  list.sort((a, b) => b.score - a.score);
+  if (list.length > 10) list.length = 10;
+  localStorage.setItem(HS_KEY, JSON.stringify(list));
+  return list;
+}
+function renderHighscores(containerId, highlightScore) {
+  const list = getHighscores();
+  const el = document.getElementById(containerId);
+  if (!list.length) { el.innerHTML = ''; return; }
+  let html = '<h3>TOPPLISTA</h3>';
+  list.forEach((hs, i) => {
+    const isNew = highlightScore !== undefined && hs.score === highlightScore && !hs._marked;
+    if (isNew) hs._marked = true;
+    html += '<div class="hs-row' + (isNew ? ' new' : '') + '">' +
+      '<span class="hs-rank">' + (i+1) + '.</span>' +
+      '<span class="hs-name">' + hs.name + '</span>' +
+      '<span class="hs-score">' + hs.score + ' (' + hs.hits + ' träffar)</span>' +
+      '</div>';
+  });
+  el.innerHTML = html;
+}
+let playerName = '';
+// Show highscores on start screen
+renderHighscores('start-highscores');
+
 // Game state
 let drone, putin, bullets, missiles, explosions, particles;
 let score, hits, gameRunning, keys, lastShot, difficulty;
@@ -201,6 +270,7 @@ function mobileKey(key, down) {
 }
 
 function startGame() {
+  playerName = (document.getElementById('player-name').value || 'ANONYM').toUpperCase();
   document.getElementById('start-screen').style.display = 'none';
   document.getElementById('game-over').style.display = 'none';
 
@@ -566,6 +636,14 @@ function showGameOver() {
   el.style.display = 'flex';
   document.getElementById('go-score').textContent = `Poäng: ${score} | Träffar: ${hits}`;
 
+  // Check if new record before saving
+  const oldList = getHighscores();
+  const isNewRecord = oldList.length === 0 || score > (oldList[0]?.score || 0);
+  document.getElementById('new-record').style.display = isNewRecord && score > 0 ? 'block' : 'none';
+
+  // Save highscore
+  saveHighscore(playerName, score, hits);
+
   let title, msg;
   if (hits === 0) {
     title = 'UPPDRAG MISSLYCKAT';
@@ -586,6 +664,8 @@ function showGameOver() {
 
   document.getElementById('go-title').textContent = title;
   document.getElementById('go-msg').textContent = msg;
+  renderHighscores('go-highscores', score);
+  renderHighscores('start-highscores');
 }
 
 function gameLoop() {
