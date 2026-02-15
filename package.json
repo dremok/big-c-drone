@@ -1,0 +1,12 @@
+{
+  "name": "big-c-drone",
+  "version": "1.0.0",
+  "description": "Styr en ukrainsk drönare och jaga Putin - ett satiriskt arkadspel",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
